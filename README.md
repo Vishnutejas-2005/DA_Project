@@ -30,4 +30,3 @@ Generated files are written to `outputs/`:
 - Annual World Bank data is interpolated to quarterly frequency.
 - Repo rate is proxied using the real interest rate series provided in the data folder.
 - The original credit-growth control was dropped from the final VAR because the provided World Bank credit series for India ends in 2021.
-# DA_Project

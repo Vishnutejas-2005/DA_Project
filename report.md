@@ -20,6 +20,7 @@ On the provided dataset, we do not find statistically significant evidence that 
 
 ## Limitations
 - The World Bank macro series are annual and have been interpolated to quarterly frequency.
+- The interpolation step also creates boundary artifacts: 2005Q1-Q3 would be mechanically backfilled from the 2005 anchor and 2022Q2-Q4 would be forward-filled from the 2022 NPA anchor, so the panel is trimmed to 2005Q4-2022Q1 to exclude those fabricated edge quarters.
 - Linear interpolation can create repeated within-year changes after differencing, so the effective number of independent quarterly movements is lower than the raw row count suggests.
 - The original credit-growth control was dropped because the provided World Bank credit series for India ends in 2021.
 - The project files do not contain the literal RBI repo-rate series, so the real interest rate is used as a proxy.
