@@ -19,13 +19,12 @@ MAX_LAGS = 8
 
 def load_npa_ratio() -> pd.DataFrame:
     df = pd.read_excel(DATA_DIR / "Dataset_1.xlsx", sheet_name=0, header=None)
-    df = df[[1, 2, 3, 4, 5]].copy()
-    df.columns = ["year", "bank", "gross_npa", "gross_advances", "npa_ratio_reported"]
+    df = df[[1, 2, 3, 4]].copy()
+    df.columns = ["year", "bank", "gross_npa", "gross_advances"]
     df["bank"] = df["bank"].astype(str).str.strip().str.upper()
     df["year"] = pd.to_numeric(df["year"], errors="coerce")
     df["gross_npa"] = pd.to_numeric(df["gross_npa"], errors="coerce")
     df["gross_advances"] = pd.to_numeric(df["gross_advances"], errors="coerce")
-    df["npa_ratio_reported"] = pd.to_numeric(df["npa_ratio_reported"], errors="coerce")
 
     df = df[df["bank"] == "ALL SCHEDULED COMMERCIAL BANKS"]
     df = df.dropna(subset=["year", "gross_npa", "gross_advances"])
@@ -57,9 +56,13 @@ def annual_to_quarterly(
     value_col: str,
     start_year: int,
     end_year: int,
+    anchor_quarter: int = 4,
 ) -> pd.Series:
     q_index = pd.period_range(f"{start_year}Q1", f"{end_year}Q4", freq="Q-DEC")
-    year_index = pd.PeriodIndex(df[year_col].astype(str), freq="Q-DEC")
+    year_index = pd.PeriodIndex(
+        [f"{int(year)}Q{anchor_quarter}" for year in df[year_col].astype(int)],
+        freq="Q-DEC",
+    )
     series = pd.Series(df[value_col].astype(float).to_numpy(), index=year_index).sort_index()
     series = series.reindex(q_index)
     series = series.interpolate(method="linear").ffill().bfill()
@@ -211,7 +214,7 @@ def prepare_member_a_review(
             f"- Not fully complete as submitted: {original_issue}",
             "",
             "Current completion status after fixes:",
-            "- Week 1 complete: all four source files are present in `data/`.",
+            "- Week 1 complete: the three source files used in the final model are present in `data/`; the old credit file is still present but intentionally unused.",
             f"- Week 2 complete: merged quarterly dataset saved to `outputs/cleaned_quarterly.csv` with {len(data)} rows and 3 columns.",
             "- Week 3 complete: `outputs/timeline.png` marks the 2015-16 rate-hike window and the timeline paragraph is written below.",
             "- Week 4 complete: differenced dataset saved to `outputs/cleaned_quarterly_differenced.csv`.",
@@ -375,6 +378,8 @@ def prepare_report(
             "",
             "## Diagnostics",
             whiteness_sentence,
+            "More specifically, linear annual-to-quarterly interpolation creates repeated intra-year step sizes, so after differencing several adjacent quarterly observations can be mechanically very similar rather than genuinely independent. "
+            "That means the exact Granger and Portmanteau p-values should be interpreted cautiously even though the overall non-significant direction-of-causality result is still informative.",
             "",
             "## Results",
             f"The main Granger result is negative in both directions. For repo-rate history predicting NPA movements, the test yields F = {repo_to_npa.f_stat:.4f} and p = {repo_to_npa.p_value:.4f}, which is essentially no predictive power in this specification. "
@@ -390,8 +395,10 @@ def prepare_report(
             "",
             "## Limitations",
             "- The World Bank macro series are annual and have been interpolated to quarterly frequency.",
+            "- Linear interpolation can create repeated within-year changes after differencing, so the effective number of independent quarterly movements is lower than the raw row count suggests.",
             "- The original credit-growth control was dropped because the provided World Bank credit series for India ends in 2021.",
             "- The project files do not contain the literal RBI repo-rate series, so the real interest rate is used as a proxy.",
+            "- RBI NPA values are reported at the March fiscal year-end; we align them to calendar Q1 of the named year, while the World Bank annual series remain a coarse calendar-year proxy.",
             "- Results should be presented as indicative rather than as a definitive structural causal estimate.",
             "",
             "## Outputs",
@@ -439,7 +446,7 @@ def prepare_slides(
             f"Lag order = {chosen_lag}; explain why BIC/AIC was used and that the final model is a 3-variable VAR.",
             "",
             "7. Diagnostics and stability",
-            "VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = 0.003), likely from annual->quarterly interpolation smoothness. Model is treated as indicative, not structural.",
+            "VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = 0.001), likely from annual->quarterly interpolation smoothness and repeated within-year first differences. Model is treated as indicative, not structural.",
             "",
             "8. Granger causality",
             f"Repo -> NPA p-value = {repo_to_npa_p:.4f}; NPA -> Repo p-value = {npa_to_repo_p:.4f}.",
@@ -455,7 +462,9 @@ def prepare_slides(
             "",
             "12. Limitations and next steps",
             "Interpolation, proxy rate series, and the dropped credit control; suggest robustness checks with a true RBI repo-rate dataset and a better-covered credit series.",
+            "",
             "Portmanteau test flags residual whiteness issue - standard caveat for interpolated short panels. A robustness check with true quarterly RBI repo and credit data would resolve this.",
+            "NPA observations are fiscal-year-end (March) values aligned to Q1, so there is still some calendar/fiscal timing approximation in the merged panel.",
         ]
     )
 
@@ -478,7 +487,14 @@ def main() -> None:
         raise ValueError("No overlapping years in requested range.")
 
     quarterly = {
-        name: annual_to_quarterly(df, "year", name, min_year, max_year)
+        name: annual_to_quarterly(
+            df,
+            "year",
+            name,
+            min_year,
+            max_year,
+            anchor_quarter=1 if name == "npa_ratio" else 4,
+        )
         for name, df in series_meta.items()
     }
     data = pd.DataFrame(quarterly)
@@ -501,7 +517,7 @@ def main() -> None:
     for col in diff_cols:
         data_var[col] = data_var[col].diff()
     data_var = data_var.dropna()
-    data_var = data_var.loc[~(data_var == 0).all(axis=1)]
+    data_var = data_var.loc[~(data_var[diff_cols] == 0).all(axis=1)]
     data_var.to_csv(OUT_DIR / "cleaned_quarterly_differenced.csv")
 
     model = VAR(data_var)

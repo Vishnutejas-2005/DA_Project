@@ -1,20 +1,20 @@
 # Member B Deliverable
 
 ## Stationarity (ADF)
-- gdp_growth: p = 0.0330, stationary at 5% = True
+- gdp_growth: p = 0.1863, stationary at 5% = False
 - npa_ratio: p = 0.3511, stationary at 5% = False
-- repo_rate: p = 0.0917, stationary at 5% = False
+- repo_rate: p = 0.1190, stationary at 5% = False
 
 ## Lag Selection
-- Chosen lag order = 2 using BIC.
+- Chosen lag order = 1 using BIC.
 - Full information-criterion table is saved in `outputs/var_lag_order.csv`.
 
 ## Diagnostics
 - VAR stable = True. Stability plot saved to `outputs/var_stability.png`.
-- npa_ratio: Durbin-Watson = 2.033
-- repo_rate: Durbin-Watson = 2.094
-- gdp_growth: Durbin-Watson = 2.067
-- Residual whiteness check: Portmanteau stat = 64.2312, p = 0.0026
+- npa_ratio: Durbin-Watson = 1.866
+- repo_rate: Durbin-Watson = 1.752
+- gdp_growth: Durbin-Watson = 1.739
+- Residual whiteness check: Portmanteau stat = 70.4660, p = 0.0005
 - Interpretation: The Portmanteau whiteness test rejects residual whiteness at the 5% level, so the fitted VAR should be presented as informative but not fully clean on residual autocorrelation.
 
 ## Methods Paragraph

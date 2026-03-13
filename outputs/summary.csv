@@ -1,2 +1,2 @@
 min_year,max_year,diff_cols,lag_choice,chosen_lag,model_stable,granger_repo_to_npa_p,granger_npa_to_repo_p,irf_peak_horizon,irf_peak_value,fevd_npa_repo_share_h8
-2005,2022,"['npa_ratio', 'repo_rate']",BIC,2,True,0.6814935625217047,0.9788588713144468,4,0.05554956724669363,0.030051023902519396
+2005,2022,"['gdp_growth', 'npa_ratio', 'repo_rate']",BIC,1,True,0.17289826409077438,0.8114843187893646,4,0.07967095880542242,0.09353937277915098

@@ -16,16 +16,16 @@ Use `outputs/timeline.png`; highlight the 2015-16 tightening window.
 Use `outputs/adf_results.csv`; explain which series were differenced and note that annual-to-quarterly interpolation can create overly smooth stationarity patterns.
 
 6. VAR setup
-Lag order = 2; explain why BIC/AIC was used and that the final model is a 3-variable VAR.
+Lag order = 1; explain why BIC/AIC was used and that the final model is a 3-variable VAR.
 
 7. Diagnostics and stability
-VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = 0.003), likely from annual->quarterly interpolation smoothness. Model is treated as indicative, not structural.
+VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = 0.001), likely from annual->quarterly interpolation smoothness and repeated within-year first differences. Model is treated as indicative, not structural.
 
 8. Granger causality
-Repo -> NPA p-value = 0.6815; NPA -> Repo p-value = 0.9789.
+Repo -> NPA p-value = 0.1729; NPA -> Repo p-value = 0.8115.
 
 9. Impulse response
-Use `outputs/irf_npa_repo.png`; peak absolute response = 0.0555 after 4 quarters.
+Use `outputs/irf_npa_repo.png`; peak absolute response = 0.0797 after 4 quarters.
 
 10. FEVD
 Use `outputs/fevd_npa.png`; explain the medium-run variance shares for NPA across the three retained variables.
@@ -35,4 +35,6 @@ Present the result bluntly: no meaningful Granger-causal evidence in either dire
 
 12. Limitations and next steps
 Interpolation, proxy rate series, and the dropped credit control; suggest robustness checks with a true RBI repo-rate dataset and a better-covered credit series.
+
 Portmanteau test flags residual whiteness issue - standard caveat for interpolated short panels. A robustness check with true quarterly RBI repo and credit data would resolve this.
+NPA observations are fiscal-year-end (March) values aligned to Q1, so there is still some calendar/fiscal timing approximation in the merged panel.
