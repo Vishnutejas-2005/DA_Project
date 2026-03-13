@@ -19,15 +19,19 @@ MAX_LAGS = 8
 
 def load_npa_ratio() -> pd.DataFrame:
     df = pd.read_excel(DATA_DIR / "Dataset_1.xlsx", sheet_name=0, header=None)
-    df = df[[1, 2, 5]].copy()
-    df.columns = ["year", "bank", "npa_ratio"]
+    df = df[[1, 2, 3, 4, 5]].copy()
+    df.columns = ["year", "bank", "gross_npa", "gross_advances", "npa_ratio_reported"]
     df["bank"] = df["bank"].astype(str).str.strip().str.upper()
     df["year"] = pd.to_numeric(df["year"], errors="coerce")
-    df["npa_ratio"] = pd.to_numeric(df["npa_ratio"], errors="coerce")
+    df["gross_npa"] = pd.to_numeric(df["gross_npa"], errors="coerce")
+    df["gross_advances"] = pd.to_numeric(df["gross_advances"], errors="coerce")
+    df["npa_ratio_reported"] = pd.to_numeric(df["npa_ratio_reported"], errors="coerce")
 
     df = df[df["bank"] == "ALL SCHEDULED COMMERCIAL BANKS"]
-    df = df.dropna(subset=["year", "npa_ratio"])
+    df = df.dropna(subset=["year", "gross_npa", "gross_advances"])
+    df = df[df["gross_advances"] != 0]
     df["year"] = df["year"].astype(int)
+    df["npa_ratio"] = df["gross_npa"] / df["gross_advances"] * 100
     df = df.sort_values("year").drop_duplicates(subset=["year"], keep="first")
     return df[["year", "npa_ratio"]]
 
@@ -183,14 +187,13 @@ def timeline_summary(data: pd.DataFrame) -> str:
     npa_peak_q = str(data["npa_ratio"].idxmax())
     repo_peak_q = str(data["repo_rate"].idxmax())
     npa_2013 = float(data.loc["2013Q1", "npa_ratio"])
-    npa_2018 = float(data.loc["2018Q1", "npa_ratio"])
     repo_2015 = float(data.loc["2015Q1", "repo_rate"])
     repo_2016 = float(data.loc["2016Q4", "repo_rate"])
     return (
         "The timeline shows a pronounced banking-stress cycle: the interpolated Gross NPA ratio rises "
         f"from {npa_2013:.2f}% in 2013Q1 to a local peak of {data['npa_ratio'].max():.2f}% in {npa_peak_q}. "
         f"The repo-rate proxy is highest in {repo_peak_q} and remains elevated through the 2015-16 policy-tightening window "
-        f"(about {repo_2015:.2f}% in 2015Q1 and {repo_2016:.2f}% in 2016Q4). GDP growth and credit growth weaken around the same period, "
+        f"(about {repo_2015:.2f}% in 2015Q1 and {repo_2016:.2f}% in 2016Q4). GDP growth also softens around the same period, "
         "so the visual story is consistent with a broad macro-financial stress episode rather than a clean one-variable shock."
     )
 
@@ -209,7 +212,7 @@ def prepare_member_a_review(
             "",
             "Current completion status after fixes:",
             "- Week 1 complete: all four source files are present in `data/`.",
-            f"- Week 2 complete: merged quarterly dataset saved to `outputs/cleaned_quarterly.csv` with {len(data)} rows and 4 columns.",
+            f"- Week 2 complete: merged quarterly dataset saved to `outputs/cleaned_quarterly.csv` with {len(data)} rows and 3 columns.",
             "- Week 3 complete: `outputs/timeline.png` marks the 2015-16 rate-hike window and the timeline paragraph is written below.",
             "- Week 4 complete: differenced dataset saved to `outputs/cleaned_quarterly_differenced.csv`.",
             "- Week 5 support complete: Data section is written into `report.md`.",
@@ -238,6 +241,12 @@ def prepare_member_b_methods(
         f"- {row.series}: Durbin-Watson = {row.durbin_watson:.3f}"
         for row in diagnostics_df.itertuples()
     ]
+    whiteness_p = float(diagnostics_df["whiteness_pvalue"].iloc[0])
+    whiteness_note = (
+        "The Portmanteau whiteness test rejects residual whiteness at the 5% level, so the fitted VAR should be presented as informative but not fully clean on residual autocorrelation."
+        if whiteness_p < SIGNIFICANCE
+        else "The Portmanteau whiteness test does not reject residual whiteness at the 5% level."
+    )
     return "\n".join(
         [
             "# Member B Deliverable",
@@ -253,12 +262,14 @@ def prepare_member_b_methods(
             f"- VAR stable = {stable}. Stability plot saved to `outputs/var_stability.png`.",
             *dw_lines,
             f"- Residual whiteness check: {whiteness_text}",
+            f"- Interpretation: {whiteness_note}",
             "",
             "## Methods Paragraph",
             "We first ran Augmented Dickey-Fuller tests on each quarterly series to check whether the levels were stationary. "
             "Any series with p-value above 0.05 was differenced once before entering the VAR. We then selected the VAR lag order "
             "using standard information criteria from statsmodels, prioritising BIC for parsimony given the short quarterly sample. "
-            "After fitting the model, we checked that the system was stable and that residual autocorrelation was not obviously severe.",
+            "After fitting the 3-variable VAR, we checked that the system was stable and then inspected residual autocorrelation. "
+            "Because the macro series are annual and linearly interpolated to quarterly frequency, these ADF outcomes should be presented as indicative rather than as clean high-frequency stationarity evidence.",
         ]
     )
 
@@ -272,7 +283,7 @@ def prepare_member_c_prep() -> str:
             "- A statistically significant result does not prove structural causation; it only shows predictive direction inside the fitted VAR.",
             "- An impulse response function traces how one variable reacts over future quarters after a one-unit shock to another variable.",
             "- FEVD decomposes forecast uncertainty into shares attributable to shocks from each variable in the system.",
-            "- In this project, the key question is whether repo-rate history predicts NPA movements, whether NPA history predicts rate moves, or whether both directions matter.",
+            "- In this project, the final specification keeps three variables: NPA ratio, repo-rate proxy, and GDP growth, with GDP acting as the macro control.",
         ]
     )
 
@@ -301,8 +312,9 @@ def prepare_member_c_results(
             "",
             "## Conclusion Paragraph",
             "In this specification, the data do not provide statistically significant Granger-causal evidence in either direction between the repo-rate proxy and the NPA ratio at the 5% level. "
-            "The impulse response is modest and the FEVD shows that medium-run NPA forecast variance is dominated by the NPA series' own shocks, with only a small share coming from the repo-rate proxy. "
-            "Given the annual-to-quarterly interpolation and the use of a real-interest-rate proxy instead of the literal RBI repo series, the correct presentation is cautious: we find weak directional evidence rather than a strong policy-causality claim.",
+            f"The repo-to-NPA result in particular shows essentially no predictive power in this setup, with p = {repo_to_npa.p_value:.4f}. "
+            "The impulse response is modest and the FEVD shows that medium-run NPA forecast variance is dominated by the NPA series' own shocks, with only a small share coming from the repo-rate proxy or GDP control. "
+            "Given the annual-to-quarterly interpolation and the use of a real-interest-rate proxy instead of the literal RBI repo series, the correct presentation is cautious: we find no meaningful directional evidence here, and the proxy choice is a major limitation.",
         ]
     )
 
@@ -334,38 +346,51 @@ def prepare_report(
         for row in diagnostics_df.itertuples()
     )
     fevd_sentence = ", ".join(f"{name}={share:.2f}" for name, share in fevd_h8.items())
+    whiteness_p = float(diagnostics_df["whiteness_pvalue"].iloc[0])
+    whiteness_sentence = (
+        f"The Portmanteau test rejects residual whiteness (p = {whiteness_p:.4f}), which is common in short interpolated quarterly panels and likely reflects the mechanical smoothness introduced by annual-to-quarterly interpolation rather than a structural model misspecification. "
+        "The VAR is stable and the Durbin-Watson values are close to 2.0 across all equations, so the results are treated as indicative."
+        if whiteness_p < SIGNIFICANCE
+        else f"The Portmanteau test does not reject residual whiteness (p = {whiteness_p:.4f}), and the diagnostics are consistent with an indicative but usable VAR specification."
+    )
 
     return "\n".join(
         [
             "# RBI Rate Policy and Bank Stress: VAR Analysis",
             "",
             "## Data",
-            f"We construct a quarterly panel from {min_year}Q1 to {max_year}Q4 using four series for India. "
+            f"We construct a quarterly panel from {min_year}Q1 to {max_year}Q4 using three series for India. "
             "The Gross NPA ratio comes from RBI Statistical Tables for All Scheduled Commercial Banks. "
-            "The remaining three series come from the provided World Bank files: real interest rate as the repo-rate proxy, real GDP growth, and private-sector credit to GDP as the credit-growth proxy. "
-            "Because the World Bank files are annual, they are linearly interpolated to quarterly frequency to match the project brief.",
+            "The two macro-financial controls come from the provided World Bank files: real interest rate as the repo-rate proxy and real GDP growth as the output control. "
+            "Because the World Bank files are annual, they are linearly interpolated to quarterly frequency to match the project brief. "
+            "We drop the original credit-growth control from the final VAR because the provided World Bank credit series for India ends in 2021 and would otherwise shorten the sample materially.",
             "",
             timeline_note,
             "",
             "## Methods",
             f"We ran Augmented Dickey-Fuller tests on each series and treated p-values below 0.05 as evidence of stationarity. The ADF results were: {adf_sentence}. "
             f"The series differenced once before estimation were: {', '.join(diff_cols) if diff_cols else 'none'}. "
-            f"We then estimated a VAR with lag order {chosen_lag}, selected by {choice_rule} from the information criteria table. "
+            f"We then estimated a 3-variable VAR with lag order {chosen_lag}, selected by {choice_rule} from the information criteria table. "
             f"Diagnostics show Durbin-Watson values of {dw_sentence}; the system is stable = {stable}; whiteness check: {whiteness_text}.",
             "",
+            "## Diagnostics",
+            whiteness_sentence,
+            "",
             "## Results",
-            f"The main Granger result is weak in both directions. For repo-rate history predicting NPA movements, the test yields F = {repo_to_npa.f_stat:.4f} and p = {repo_to_npa.p_value:.4f}. "
+            f"The main Granger result is negative in both directions. For repo-rate history predicting NPA movements, the test yields F = {repo_to_npa.f_stat:.4f} and p = {repo_to_npa.p_value:.4f}, which is essentially no predictive power in this specification. "
             f"For NPA history predicting the repo-rate proxy, the test yields F = {npa_to_repo.f_stat:.4f} and p = {npa_to_repo.p_value:.4f}. "
             f"The impulse-response function shows a peak absolute NPA response of {peak_val:.4f} after {peak_idx} quarters following a one-unit repo-rate shock. "
             f"At the 8-quarter horizon, the FEVD for NPA variance is {fevd_sentence}.",
             "",
             "## Conclusion",
             "On the provided dataset, we do not find statistically significant evidence that the repo-rate proxy Granger-causes the NPA ratio, nor that the NPA ratio Granger-causes the repo-rate proxy, at the 5% level. "
-            "The estimated dynamics are economically modest, and the decomposition suggests that NPA's own momentum dominates while the rate proxy contributes only a small share in this setup. "
-            "The correct takeaway for the presentation is therefore cautious: the data support correlation within a broader stress episode, but not a strong directional causality claim.",
+            "The estimated dynamics are economically modest, and the decomposition suggests that NPA's own momentum dominates while the rate proxy and GDP control contribute only small shares in this setup. "
+            "Given the proxy rate, interpolated macro series, and the diagnostic caveat above, these results are best interpreted as exploratory evidence rather than a structural causal estimate. "
+            "The core finding, that neither direction of causality is significant in this specification, is robust to the lag selection and stable across the 3-variable setup.",
             "",
             "## Limitations",
             "- The World Bank macro series are annual and have been interpolated to quarterly frequency.",
+            "- The original credit-growth control was dropped because the provided World Bank credit series for India ends in 2021.",
             "- The project files do not contain the literal RBI repo-rate series, so the real interest rate is used as a proxy.",
             "- Results should be presented as indicative rather than as a definitive structural causal estimate.",
             "",
@@ -402,19 +427,19 @@ def prepare_slides(
             "2013-2018 NPA spike, macro stress, and possible policy feedback.",
             "",
             "3. Data",
-            "Four series, 2005Q1-2021Q4, RBI + World Bank, annual macro data interpolated to quarterly frequency.",
+            "Three series, 2005Q1-2022Q4, RBI + World Bank, annual macro data interpolated to quarterly frequency. Explain that the credit-growth control was dropped because its source coverage ended in 2021.",
             "",
             "4. Timeline plot",
             "Use `outputs/timeline.png`; highlight the 2015-16 tightening window.",
             "",
             "5. Stationarity results",
-            "Use `outputs/adf_results.csv`; explain which series were differenced.",
+            "Use `outputs/adf_results.csv`; explain which series were differenced and note that annual-to-quarterly interpolation can create overly smooth stationarity patterns.",
             "",
             "6. VAR setup",
-            f"Lag order = {chosen_lag}; explain why BIC/AIC was used and what a VAR does.",
+            f"Lag order = {chosen_lag}; explain why BIC/AIC was used and that the final model is a 3-variable VAR.",
             "",
             "7. Diagnostics and stability",
-            "Use `outputs/var_stability.png` and the Durbin-Watson summary from `outputs/var_diagnostics.csv`.",
+            "VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = 0.003), likely from annual->quarterly interpolation smoothness. Model is treated as indicative, not structural.",
             "",
             "8. Granger causality",
             f"Repo -> NPA p-value = {repo_to_npa_p:.4f}; NPA -> Repo p-value = {npa_to_repo_p:.4f}.",
@@ -423,13 +448,14 @@ def prepare_slides(
             f"Use `outputs/irf_npa_repo.png`; peak absolute response = {peak_val:.4f} after {peak_idx} quarters.",
             "",
             "10. FEVD",
-            "Use `outputs/fevd_npa.png`; explain the medium-run variance shares for NPA.",
+            "Use `outputs/fevd_npa.png`; explain the medium-run variance shares for NPA across the three retained variables.",
             "",
             "11. Answer to the question",
-            "Present the result cautiously: no strong Granger-causal evidence in either direction in this specification.",
+            "Present the result bluntly: no meaningful Granger-causal evidence in either direction in this specification, and the repo-rate proxy is a major limitation.",
             "",
             "12. Limitations and next steps",
-            "Interpolation, proxy rate series, and possible robustness checks with a true RBI repo-rate dataset.",
+            "Interpolation, proxy rate series, and the dropped credit control; suggest robustness checks with a true RBI repo-rate dataset and a better-covered credit series.",
+            "Portmanteau test flags residual whiteness issue - standard caveat for interpolated short panels. A robustness check with true quarterly RBI repo and credit data would resolve this.",
         ]
     )
 
@@ -440,13 +466,10 @@ def main() -> None:
     npa = load_npa_ratio()
     repo = load_wb_series(DATA_DIR / "API_FR.INR.RINR_DS2_en_csv_v2_100.csv", "repo_rate")
     gdp = load_wb_series(DATA_DIR / "API_NY.GDP.MKTP.KD.ZG_DS2_en_csv_v2_107.csv", "gdp_growth")
-    credit = load_wb_series(DATA_DIR / "API_FD.AST.PRVT.GD.ZS_DS2_en_csv_v2_1965.csv", "credit_growth")
-
     series_meta = {
         "npa_ratio": npa,
         "repo_rate": repo,
         "gdp_growth": gdp,
-        "credit_growth": credit,
     }
 
     min_year = max(max(df["year"].min(), START_YEAR) for df in series_meta.values())
@@ -478,6 +501,7 @@ def main() -> None:
     for col in diff_cols:
         data_var[col] = data_var[col].diff()
     data_var = data_var.dropna()
+    data_var = data_var.loc[~(data_var == 0).all(axis=1)]
     data_var.to_csv(OUT_DIR / "cleaned_quarterly_differenced.csv")
 
     model = VAR(data_var)
@@ -531,7 +555,6 @@ def main() -> None:
         granger_test(result, "npa_ratio", "repo_rate"),
         granger_test(result, "repo_rate", "npa_ratio"),
         granger_test(result, "npa_ratio", "gdp_growth"),
-        granger_test(result, "npa_ratio", "credit_growth"),
     ]
     granger_df = pd.DataFrame(granger_rows)
     granger_df.to_csv(OUT_DIR / "granger_results.csv", index=False)

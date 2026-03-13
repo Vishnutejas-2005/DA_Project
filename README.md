@@ -1,6 +1,7 @@
 # Project: RBI Rate Policy vs Bank Stress
 
 This repo contains a full end-to-end analysis based on the provided data files and the project explainer.
+The final model is a 3-variable VAR using `npa_ratio`, the repo-rate proxy, and GDP growth.
 
 ## Quick start
 ```bash
@@ -28,4 +29,5 @@ Generated files are written to `outputs/`:
 ## Notes
 - Annual World Bank data is interpolated to quarterly frequency.
 - Repo rate is proxied using the real interest rate series provided in the data folder.
+- The original credit-growth control was dropped from the final VAR because the provided World Bank credit series for India ends in 2021.
 # DA_Project
