@@ -260,6 +260,7 @@ def prepare_member_b_methods(
             "## Lag Selection",
             f"- Chosen lag order = {chosen_lag} using {choice_rule}.",
             "- Full information-criterion table is saved in `outputs/var_lag_order.csv`.",
+            "- Note that AIC selected lag=5 while BIC selected lag=1; this large gap is itself a signal that the short interpolated sample does not contain enough independent information to distinguish between lag structures reliably.",
             "",
             "## Diagnostics",
             f"- VAR stable = {stable}. Stability plot saved to `outputs/var_stability.png`.",
@@ -323,8 +324,8 @@ def prepare_member_c_results(
 
 
 def prepare_report(
-    min_year: int,
-    max_year: int,
+    sample_start: str,
+    sample_end: str,
     timeline_note: str,
     adf_df: pd.DataFrame,
     diff_cols: list[str],
@@ -362,7 +363,7 @@ def prepare_report(
             "# RBI Rate Policy and Bank Stress: VAR Analysis",
             "",
             "## Data",
-            f"We construct a quarterly panel from {min_year}Q1 to {max_year}Q4 using three series for India. "
+            f"We construct a quarterly panel from {sample_start} to {sample_end} using three series for India. "
             "The Gross NPA ratio comes from RBI Statistical Tables for All Scheduled Commercial Banks. "
             "The two macro-financial controls come from the provided World Bank files: real interest rate as the repo-rate proxy and real GDP growth as the output control. "
             "Because the World Bank files are annual, they are linearly interpolated to quarterly frequency to match the project brief. "
@@ -399,6 +400,7 @@ def prepare_report(
             "- The original credit-growth control was dropped because the provided World Bank credit series for India ends in 2021.",
             "- The project files do not contain the literal RBI repo-rate series, so the real interest rate is used as a proxy.",
             "- RBI NPA values are reported at the March fiscal year-end; we align them to calendar Q1 of the named year, while the World Bank annual series remain a coarse calendar-year proxy.",
+            "- GDP growth (World Bank NY.GDP.MKTP.KD.ZG) is already a percentage-change series; the ADF test classified it as non-stationary so it was differenced once, meaning the VAR uses the quarter-on-quarter change in GDP growth (acceleration), not the growth rate itself.",
             "- Results should be presented as indicative rather than as a definitive structural causal estimate.",
             "",
             "## Outputs",
@@ -422,6 +424,7 @@ def prepare_slides(
     npa_to_repo_p: float,
     peak_idx: int,
     peak_val: float,
+    whiteness_p: float,
 ) -> str:
     return "\n".join(
         [
@@ -434,7 +437,7 @@ def prepare_slides(
             "2013-2018 NPA spike, macro stress, and possible policy feedback.",
             "",
             "3. Data",
-            "Three series, 2005Q1-2022Q4, RBI + World Bank, annual macro data interpolated to quarterly frequency. Explain that the credit-growth control was dropped because its source coverage ended in 2021.",
+            "Three series, 2005Q4-2022Q1, RBI + World Bank, annual macro data interpolated to quarterly frequency. Explain that the credit-growth control was dropped because its source coverage ended in 2021.",
             "",
             "4. Timeline plot",
             "Use `outputs/timeline.png`; highlight the 2015-16 tightening window.",
@@ -443,10 +446,10 @@ def prepare_slides(
             "Use `outputs/adf_results.csv`; explain which series were differenced and note that annual-to-quarterly interpolation can create overly smooth stationarity patterns.",
             "",
             "6. VAR setup",
-            f"Lag order = {chosen_lag}; explain why BIC/AIC was used and that the final model is a 3-variable VAR.",
+            f"Lag order = {chosen_lag}; explain why BIC/AIC was used and that the final model is a 3-variable VAR. Note: AIC disagrees, selecting lag=5, so mention this gap explicitly.",
             "",
             "7. Diagnostics and stability",
-            "VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = 0.001), likely from annual->quarterly interpolation smoothness and repeated within-year first differences. Model is treated as indicative, not structural.",
+            f"VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = {whiteness_p:.4f}), likely from annual->quarterly interpolation smoothness and repeated within-year first differences. Model is treated as indicative, not structural.",
             "",
             "8. Granger causality",
             f"Repo -> NPA p-value = {repo_to_npa_p:.4f}; NPA -> Repo p-value = {npa_to_repo_p:.4f}.",
@@ -465,6 +468,7 @@ def prepare_slides(
             "",
             "Portmanteau test flags residual whiteness issue - standard caveat for interpolated short panels. A robustness check with true quarterly RBI repo and credit data would resolve this.",
             "NPA observations are fiscal-year-end (March) values aligned to Q1, so there is still some calendar/fiscal timing approximation in the merged panel.",
+            "GDP growth is already a percentage-change series, but it was differenced after the ADF test classified it as non-stationary, so the VAR uses changes in GDP growth rather than the growth rate itself.",
         ]
     )
 
@@ -493,12 +497,15 @@ def main() -> None:
             name,
             min_year,
             max_year,
-            anchor_quarter=1 if name == "npa_ratio" else 4,
+            anchor_quarter=1,
         )
         for name, df in series_meta.items()
     }
     data = pd.DataFrame(quarterly)
+    data = data.loc["2005Q4":"2022Q1"]
     data.index.name = "quarter"
+    sample_start = str(data.index.min())
+    sample_end = str(data.index.max())
     data.to_csv(OUT_DIR / "cleaned_quarterly.csv")
 
     build_timeline_plot(data)
@@ -517,7 +524,7 @@ def main() -> None:
     for col in diff_cols:
         data_var[col] = data_var[col].diff()
     data_var = data_var.dropna()
-    data_var = data_var.loc[~(data_var[diff_cols] == 0).all(axis=1)]
+    data_var = data_var.loc[~(data_var["npa_ratio"] == 0)]
     data_var.to_csv(OUT_DIR / "cleaned_quarterly_differenced.csv")
 
     model = VAR(data_var)
@@ -607,8 +614,8 @@ def main() -> None:
 
     Path("report.md").write_text(
         prepare_report(
-            min_year,
-            max_year,
+            sample_start,
+            sample_end,
             timeline_note,
             adf_df,
             diff_cols,
@@ -631,6 +638,7 @@ def main() -> None:
             float(granger_df.iloc[1]["p_value"]),
             peak_idx,
             peak_val,
+            float(diagnostics_df["whiteness_pvalue"].iloc[0]),
         ),
         encoding="utf-8",
     )
@@ -640,6 +648,8 @@ def main() -> None:
             {
                 "min_year": min_year,
                 "max_year": max_year,
+                "sample_start": sample_start,
+                "sample_end": sample_end,
                 "diff_cols": diff_cols,
                 "lag_choice": choice_rule,
                 "chosen_lag": chosen_lag,
