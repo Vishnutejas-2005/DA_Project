@@ -19,7 +19,7 @@ Use `outputs/adf_results.csv`; explain which series were differenced and note th
 Lag order = 1; explain why BIC/AIC was used and that the final model is a 3-variable VAR. Note: AIC disagrees, selecting lag=5, so mention this gap explicitly.
 
 7. Diagnostics and stability
-VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = 0.0119), likely from annual->quarterly interpolation smoothness and repeated within-year first differences. Model is treated as indicative, not structural.
+VAR is stable (all inverse roots inside unit circle). Durbin-Watson: npa=1.85, repo=1.63, gdp=1.74 - repo residuals show mild autocorrelation but no severe violations. Portmanteau test flags residual correlation (p = 0.0119), likely from annual->quarterly interpolation smoothness and repeated within-year first differences. Model is treated as indicative, not structural.
 
 8. Granger causality
 Repo -> NPA p-value = 0.5478; NPA -> Repo p-value = 0.9187.

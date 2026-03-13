@@ -375,6 +375,7 @@ def prepare_report(
             f"We ran Augmented Dickey-Fuller tests on each series and treated p-values below 0.05 as evidence of stationarity. The ADF results were: {adf_sentence}. "
             f"The series differenced once before estimation were: {', '.join(diff_cols) if diff_cols else 'none'}. "
             f"We then estimated a 3-variable VAR with lag order {chosen_lag}, selected by {choice_rule} from the information criteria table. "
+            "Note that AIC selected lag=5 while BIC selected lag=1; given the short interpolated sample this gap is expected and BIC is preferred for parsimony. "
             f"Diagnostics show Durbin-Watson values of {dw_sentence}; the system is stable = {stable}; whiteness check: {whiteness_text}.",
             "",
             "## Diagnostics",
@@ -425,6 +426,9 @@ def prepare_slides(
     peak_idx: int,
     peak_val: float,
     whiteness_p: float,
+    dw_npa: float,
+    dw_repo: float,
+    dw_gdp: float,
 ) -> str:
     return "\n".join(
         [
@@ -449,7 +453,7 @@ def prepare_slides(
             f"Lag order = {chosen_lag}; explain why BIC/AIC was used and that the final model is a 3-variable VAR. Note: AIC disagrees, selecting lag=5, so mention this gap explicitly.",
             "",
             "7. Diagnostics and stability",
-            f"VAR is stable (all inverse roots inside unit circle). Durbin-Watson ~= 2 across equations - no severe autocorrelation. Portmanteau test flags residual correlation (p = {whiteness_p:.4f}), likely from annual->quarterly interpolation smoothness and repeated within-year first differences. Model is treated as indicative, not structural.",
+            f"VAR is stable (all inverse roots inside unit circle). Durbin-Watson: npa={dw_npa:.2f}, repo={dw_repo:.2f}, gdp={dw_gdp:.2f} - repo residuals show mild autocorrelation but no severe violations. Portmanteau test flags residual correlation (p = {whiteness_p:.4f}), likely from annual->quarterly interpolation smoothness and repeated within-year first differences. Model is treated as indicative, not structural.",
             "",
             "8. Granger causality",
             f"Repo -> NPA p-value = {repo_to_npa_p:.4f}; NPA -> Repo p-value = {npa_to_repo_p:.4f}.",
@@ -639,6 +643,9 @@ def main() -> None:
             peak_idx,
             peak_val,
             float(diagnostics_df["whiteness_pvalue"].iloc[0]),
+            float(diagnostics_df.loc[diagnostics_df["series"] == "npa_ratio", "durbin_watson"].iloc[0]),
+            float(diagnostics_df.loc[diagnostics_df["series"] == "repo_rate", "durbin_watson"].iloc[0]),
+            float(diagnostics_df.loc[diagnostics_df["series"] == "gdp_growth", "durbin_watson"].iloc[0]),
         ),
         encoding="utf-8",
     )
