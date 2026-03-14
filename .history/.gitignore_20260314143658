@@ -11,5 +11,3 @@ __pycache__/
 .vscode/
 *.env
 *.egg-info/
-dist/
-build/

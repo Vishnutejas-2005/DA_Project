@@ -7,9 +7,3 @@ __pycache__/
 *.sqlite3
 *.db
 .DS_Store
-.idea/
-.vscode/
-*.env
-*.egg-info/
-dist/
-build/
