@@ -1,2 +1,0 @@
-min_year,max_year,sample_start,sample_end,diff_cols,lag_choice,chosen_lag,model_stable,granger_repo_to_npa_p,granger_npa_to_repo_p,irf_peak_horizon,irf_peak_value,fevd_npa_repo_share_h8
-2005,2022,2005Q4,2022Q1,"['gdp_growth', 'npa_ratio', 'repo_rate']",BIC,1,True,0.5478151868090908,0.9186976305534476,4,0.038121698337246,0.021801761145221168

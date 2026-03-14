@@ -1,4 +1,0 @@
-caused,causing,f_stat,p_value,significant_at_5pct
-npa_ratio,repo_rate,0.3626151974446861,0.5478151868090908,False
-repo_rate,npa_ratio,0.010448465953581374,0.9186976305534476,False
-npa_ratio,gdp_growth,0.10537639387706177,0.7458476741420661,False
